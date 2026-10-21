@@ -48,7 +48,7 @@ rideflow-microservices/
 - [x] 2. Shared events module
 - [x] 3. location-service
 - [x] 4. ride-service core
-- [ ] 5. Kafka producer
+- [x] 5. Kafka producer
 - [ ] 6. matching-service
 - [ ] 7. ride-service consumer
 - [ ] 8. Reliability

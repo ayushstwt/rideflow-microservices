@@ -5,14 +5,17 @@ import com.ayshriv.rideservice.dto.RideRequest;
 import com.ayshriv.rideservice.dto.RideResponse;
 import com.ayshriv.rideservice.exception.InvalidRideStateException;
 import com.ayshriv.rideservice.exception.RideNotFoundException;
+import com.ayshriv.rideservice.messaging.RideRequestedInternalEvent;
 import com.ayshriv.rideservice.model.Ride;
 import com.ayshriv.rideservice.model.RideStatus;
 import com.ayshriv.rideservice.repository.RideRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -39,13 +42,15 @@ class RideServiceTest {
     private RideRepository rideRepository;
     @Mock
     private FareCalculator fareCalculator;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     private RideService rideService;
 
     @BeforeEach
     void setUp() {
         rideService = new RideService(rideRepository, new RideMapper(), fareCalculator,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                Clock.fixed(NOW, ZoneOffset.UTC), eventPublisher);
     }
 
     @Test
@@ -71,6 +76,25 @@ class RideServiceTest {
         assertThat(response.getStatus()).isEqualTo(RideStatus.MATCHING);
         assertThat(response.getEstimatedFare()).isEqualByComparingTo(FARE);
         verify(rideRepository, times(2)).saveAndFlush(any(Ride.class));
+
+        ArgumentCaptor<RideRequestedInternalEvent> published = ArgumentCaptor.forClass(RideRequestedInternalEvent.class);
+        verify(eventPublisher, times(1)).publishEvent(published.capture());
+        assertThat(published.getValue().ride().getId()).isEqualTo("ride-1");
+    }
+
+    @Test
+    void requestRide_publishesNothingWhenSaveFails() {
+        RideRequest request = RideRequest.builder()
+                .riderId("rider-1")
+                .pickupLatitude(12.97).pickupLongitude(77.59).pickupAddress("A")
+                .dropLatitude(13.02).dropLongitude(77.65).dropAddress("B")
+                .build();
+        when(fareCalculator.calculateFare(12.97, 77.59, 13.02, 77.65)).thenReturn(FARE);
+        when(rideRepository.saveAndFlush(any(Ride.class))).thenThrow(new IllegalStateException("db down"));
+
+        assertThatThrownBy(() -> rideService.requestRide(request)).isInstanceOf(IllegalStateException.class);
+
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 
     @Test

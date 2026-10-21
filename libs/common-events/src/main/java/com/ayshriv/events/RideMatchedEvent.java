@@ -22,11 +22,11 @@ import java.time.Instant;
 public class RideMatchedEvent {
 
     @NotNull
-    private Long rideId;
+    private String rideId;
     @NotNull
-    private Long riderId;
+    private String riderId;
     @NotNull
-    private Long driverId;
+    private String driverId;
 
     private Double driverLatitude;
     private Double driverLongitude;

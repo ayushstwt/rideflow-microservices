@@ -8,8 +8,10 @@ import com.ayshriv.rideservice.exception.RideNotFoundException;
 import com.ayshriv.rideservice.model.Ride;
 import com.ayshriv.rideservice.model.RideStatus;
 import com.ayshriv.rideservice.repository.RideRepository;
+import com.ayshriv.rideservice.messaging.RideRequestedInternalEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +30,7 @@ public class RideService {
     private final RideMapper rideMapper;
     private final FareCalculator fareCalculator;
     private final Clock clock;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Persists the ride as REQUESTED and immediately moves it to MATCHING in the same transaction.
@@ -46,7 +49,7 @@ public class RideService {
         transition(ride, RideStatus.MATCHING);
         ride = rideRepository.saveAndFlush(ride);
 
-        // TODO(Step 5): publish RideRequestedEvent to Kafka (after the transaction commits).
+        eventPublisher.publishEvent(new RideRequestedInternalEvent(ride));
         log.info("Ride {} requested by rider {}, estimated fare {}", ride.getId(), ride.getRiderId(), estimatedFare);
         return rideMapper.toResponse(ride);
     }

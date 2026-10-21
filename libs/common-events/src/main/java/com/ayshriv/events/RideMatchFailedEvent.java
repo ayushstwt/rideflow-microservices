@@ -22,9 +22,9 @@ import java.time.Instant;
 public class RideMatchFailedEvent {
 
     @NotNull
-    private Long rideId;
+    private String rideId;
     @NotNull
-    private Long riderId;
+    private String riderId;
 
     private String reason;
 

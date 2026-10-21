@@ -127,3 +127,32 @@ curl -X PUT http://localhost:8083/api/v1/rides/7c9e6679-7425-40de-944b-e07fc1f90
 | 500 | Unexpected failure; body is `{"error": "Internal server error"}` with no stack trace |
 
 State-change endpoints return `409` with `{"error": "Ride <id> cannot move from CANCELLED to RIDE_STARTED"}`.
+
+## Kafka events
+
+ride-service publishes to Kafka only **after** the database transaction commits (`@TransactionalEventListener(AFTER_COMMIT)`). A rolled-back request sends nothing.
+
+### ride.requested
+
+| | |
+|---|---|
+| Topic | `ride.requested` (3 partitions, replication factor 1) |
+| Key | `rideId` (keeps all events of one ride ordered in one partition) |
+| Producer | ride-service, with `acks=all` and idempotence enabled |
+| Consumer | matching-service |
+
+```json
+{
+  "rideId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "riderId": "rider-42",
+  "pickupLatitude": 12.9716,
+  "pickupLongitude": 77.5946,
+  "pickupAddress": "MG Road",
+  "dropLatitude": 13.0827,
+  "dropLongitude": 80.2707,
+  "dropAddress": "T Nagar",
+  "requestedAt": "2026-01-01T10:00:00Z"
+}
+```
+
+The topics `ride.matched` and `ride.match-failed` are also declared at startup; they are produced by matching-service.
