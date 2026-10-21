@@ -26,10 +26,26 @@ An Uber-like ride-hailing backend built with event-driven Spring Boot microservi
 - OpenFeign
 - Maven, Lombok
 
+## Project structure
+
+```
+rideflow-microservices/
+├── pom.xml                  # parent POM (rideflow-parent)
+├── docker-compose.yml       # infra definition (Redis, MySQL, Kafka)
+├── .env.example
+├── docs/
+├── libs/
+│   └── common-events/       # shared Kafka event DTOs and topic names
+└── services/
+    ├── location-service/
+    ├── ride-service/
+    └── matching-service/
+```
+
 ## Roadmap
 
-- [ ] 1. Repository skeleton
-- [ ] 2. Shared events module
+- [x] 1. Repository skeleton
+- [x] 2. Shared events module
 - [ ] 3. location-service
 - [ ] 4. ride-service core
 - [ ] 5. Kafka producer
