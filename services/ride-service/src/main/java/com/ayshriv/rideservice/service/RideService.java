@@ -3,6 +3,7 @@ package com.ayshriv.rideservice.service;
 import com.ayshriv.rideservice.dto.RideMapper;
 import com.ayshriv.rideservice.dto.RideRequest;
 import com.ayshriv.rideservice.dto.RideResponse;
+import com.ayshriv.rideservice.dto.RideStatusResponse;
 import com.ayshriv.rideservice.exception.InvalidRideStateException;
 import com.ayshriv.rideservice.exception.RideNotFoundException;
 import com.ayshriv.rideservice.model.Ride;
@@ -96,25 +97,52 @@ public class RideService {
     /**
      * Assigns a matched driver. Idempotent: only a ride still in MATCHING is updated; anything else
      * (unknown ride, already assigned, cancelled, ...) is logged and ignored so that a redelivered
-     * message does not fail.
+     * or late message does not fail. A concurrent update surfaces as an optimistic-lock failure; callers
+     * retry it with {@link OptimisticLockRetry}, which must run outside this transaction.
      */
     @Transactional
-    void assignDriver(String rideId, String driverId) {
-        Optional<Ride> found = rideRepository.findById(rideId);
-        if (found.isEmpty()) {
-            log.warn("Ignoring driver assignment: ride {} not found", rideId);
-            return;
-        }
-        Ride ride = found.get();
-        if (ride.getStatus() != RideStatus.MATCHING) {
-            log.warn("Ignoring driver assignment for ride {}: status is {}, expected MATCHING",
-                    rideId, ride.getStatus());
+    public void assignDriver(String rideId, String driverId) {
+        Ride ride = findMatchingRide(rideId, "driver assignment");
+        if (ride == null) {
             return;
         }
         ride.setDriverId(driverId);
         transition(ride, RideStatus.ACCEPTED);
         rideRepository.saveAndFlush(ride);
         log.info("Driver {} assigned to ride {}", driverId, rideId);
+    }
+
+    /** Same idempotency rules as {@link #assignDriver}: only a ride still in MATCHING can become NO_DRIVER_FOUND. */
+    @Transactional
+    public void markNoDriverFound(String rideId, String reason) {
+        Ride ride = findMatchingRide(rideId, "no-driver result");
+        if (ride == null) {
+            return;
+        }
+        transition(ride, RideStatus.NO_DRIVER_FOUND);
+        rideRepository.saveAndFlush(ride);
+        log.info("Ride {} marked NO_DRIVER_FOUND: {}", rideId, reason);
+    }
+
+    @Transactional(readOnly = true)
+    public RideStatusResponse getRideStatus(String rideId) {
+        Ride ride = findRide(rideId);
+        return new RideStatusResponse(ride.getId(), ride.getStatus(), ride.getDriverId());
+    }
+
+    /** Returns the ride only if it exists and is MATCHING; otherwise logs and returns null (never throws). */
+    private Ride findMatchingRide(String rideId, String what) {
+        Optional<Ride> found = rideRepository.findById(rideId);
+        if (found.isEmpty()) {
+            log.warn("Ignoring {}: ride {} not found", what, rideId);
+            return null;
+        }
+        Ride ride = found.get();
+        if (ride.getStatus() != RideStatus.MATCHING) {
+            log.warn("Ignoring {} for ride {}: status is {}, expected MATCHING", what, rideId, ride.getStatus());
+            return null;
+        }
+        return ride;
     }
 
     /** Single place where status changes are validated against {@link RideStatus#canTransitionTo}. */

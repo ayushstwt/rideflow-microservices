@@ -1,6 +1,7 @@
 package com.ayshriv.rideservice.controller;
 
 import com.ayshriv.rideservice.dto.RideResponse;
+import com.ayshriv.rideservice.dto.RideStatusResponse;
 import com.ayshriv.rideservice.exception.InvalidRideStateException;
 import com.ayshriv.rideservice.exception.RideNotFoundException;
 import com.ayshriv.rideservice.model.RideStatus;
@@ -96,6 +97,25 @@ class RideControllerTest {
         mockMvc.perform(put("/api/v1/rides/r1/start"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error").exists());
+    }
+
+    @Test
+    void getRideStatus_returnsOnlyIdStatusAndDriver() throws Exception {
+        when(rideService.getRideStatus("r1")).thenReturn(new RideStatusResponse("r1", RideStatus.ACCEPTED, "d1"));
+
+        mockMvc.perform(get("/api/v1/rides/r1/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rideId").value("r1"))
+                .andExpect(jsonPath("$.status").value("ACCEPTED"))
+                .andExpect(jsonPath("$.driverId").value("d1"))
+                .andExpect(jsonPath("$.estimatedFare").doesNotExist());
+    }
+
+    @Test
+    void getRideStatus_returns404WhenMissing() throws Exception {
+        when(rideService.getRideStatus("missing")).thenThrow(new RideNotFoundException("missing"));
+
+        mockMvc.perform(get("/api/v1/rides/missing/status")).andExpect(status().isNotFound());
     }
 
     @Test

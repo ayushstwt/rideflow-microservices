@@ -2,6 +2,7 @@ package com.ayshriv.rideservice.controller;
 
 import com.ayshriv.rideservice.dto.RideRequest;
 import com.ayshriv.rideservice.dto.RideResponse;
+import com.ayshriv.rideservice.dto.RideStatusResponse;
 import com.ayshriv.rideservice.service.RideService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,11 @@ public class RideController {
     @GetMapping("/{rideId}")
     public ResponseEntity<RideResponse> getRide(@PathVariable String rideId) {
         return ResponseEntity.ok(rideService.getRideById(rideId));
+    }
+
+    @GetMapping("/{rideId}/status")
+    public ResponseEntity<RideStatusResponse> getRideStatus(@PathVariable String rideId) {
+        return ResponseEntity.ok(rideService.getRideStatus(rideId));
     }
 
     @GetMapping("/rider/{riderId}")

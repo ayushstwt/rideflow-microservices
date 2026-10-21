@@ -50,7 +50,7 @@ rideflow-microservices/
 - [x] 4. ride-service core
 - [x] 5. Kafka producer
 - [x] 6. matching-service
-- [ ] 7. ride-service consumer
+- [x] 7. ride-service consumer
 - [ ] 8. Reliability
 - [ ] 9. Tests
 - [ ] 10. API docs

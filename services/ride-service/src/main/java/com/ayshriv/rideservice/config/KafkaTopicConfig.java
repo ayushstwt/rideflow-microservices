@@ -30,6 +30,17 @@ public class KafkaTopicConfig {
         return topic(KafkaTopics.RIDE_MATCH_FAILED);
     }
 
+    /** Dead-letter topics for the consumers; same partition count because the recoverer keeps the partition. */
+    @Bean
+    public NewTopic rideMatchedDltTopic() {
+        return topic(KafkaTopics.RIDE_MATCHED + ".DLT");
+    }
+
+    @Bean
+    public NewTopic rideMatchFailedDltTopic() {
+        return topic(KafkaTopics.RIDE_MATCH_FAILED + ".DLT");
+    }
+
     private static NewTopic topic(String name) {
         return TopicBuilder.name(name).partitions(PARTITIONS).replicas(REPLICAS).build();
     }

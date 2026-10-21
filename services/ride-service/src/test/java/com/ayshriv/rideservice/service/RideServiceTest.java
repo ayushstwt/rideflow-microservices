@@ -3,6 +3,7 @@ package com.ayshriv.rideservice.service;
 import com.ayshriv.rideservice.dto.RideMapper;
 import com.ayshriv.rideservice.dto.RideRequest;
 import com.ayshriv.rideservice.dto.RideResponse;
+import com.ayshriv.rideservice.dto.RideStatusResponse;
 import com.ayshriv.rideservice.exception.InvalidRideStateException;
 import com.ayshriv.rideservice.exception.RideNotFoundException;
 import com.ayshriv.rideservice.messaging.RideRequestedInternalEvent;
@@ -16,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -203,6 +205,87 @@ class RideServiceTest {
         rideService.assignDriver("missing", "d9");
 
         verify(rideRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void assignDriver_ignoresCancelledRide() {
+        Ride ride = ride("r1", RideStatus.CANCELLED, null);
+        when(rideRepository.findById("r1")).thenReturn(Optional.of(ride));
+
+        rideService.assignDriver("r1", "d9");
+
+        assertThat(ride.getDriverId()).isNull();
+        assertThat(ride.getStatus()).isEqualTo(RideStatus.CANCELLED);
+        verify(rideRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void assignDriver_duplicateMessageDoesNothing() {
+        Ride ride = ride("r1", RideStatus.MATCHING, null);
+        when(rideRepository.findById("r1")).thenReturn(Optional.of(ride));
+
+        rideService.assignDriver("r1", "d9");
+        rideService.assignDriver("r1", "d9");
+
+        assertThat(ride.getDriverId()).isEqualTo("d9");
+        assertThat(ride.getStatus()).isEqualTo(RideStatus.ACCEPTED);
+        verify(rideRepository, times(1)).saveAndFlush(ride);
+    }
+
+    @Test
+    void assignDriver_propagatesOptimisticLockFailureSoTheCallerCanRetryInAFreshTransaction() {
+        Ride ride = ride("r1", RideStatus.MATCHING, null);
+        when(rideRepository.findById("r1")).thenReturn(Optional.of(ride));
+        when(rideRepository.saveAndFlush(ride)).thenThrow(new ObjectOptimisticLockingFailureException(Ride.class, "r1"));
+
+        assertThatThrownBy(() -> rideService.assignDriver("r1", "d9"))
+                .isInstanceOf(ObjectOptimisticLockingFailureException.class);
+    }
+
+    @Test
+    void markNoDriverFound_movesMatchingRideToNoDriverFound() {
+        Ride ride = ride("r1", RideStatus.MATCHING, null);
+        when(rideRepository.findById("r1")).thenReturn(Optional.of(ride));
+
+        rideService.markNoDriverFound("r1", "NO_DRIVERS_AVAILABLE");
+
+        assertThat(ride.getStatus()).isEqualTo(RideStatus.NO_DRIVER_FOUND);
+        verify(rideRepository).saveAndFlush(ride);
+    }
+
+    @Test
+    void markNoDriverFound_ignoresRideThatIsNotMatching() {
+        Ride ride = ride("r1", RideStatus.ACCEPTED, "d1");
+        when(rideRepository.findById("r1")).thenReturn(Optional.of(ride));
+
+        rideService.markNoDriverFound("r1", "NO_DRIVERS_AVAILABLE");
+
+        assertThat(ride.getStatus()).isEqualTo(RideStatus.ACCEPTED);
+        verify(rideRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void markNoDriverFound_ignoresUnknownRide() {
+        when(rideRepository.findById("missing")).thenReturn(Optional.empty());
+
+        rideService.markNoDriverFound("missing", "NO_DRIVERS_AVAILABLE");
+
+        verify(rideRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void getRideStatus_returnsOnlyIdStatusAndDriver() {
+        when(rideRepository.findById("r1")).thenReturn(Optional.of(ride("r1", RideStatus.ACCEPTED, "d1")));
+
+        assertThat(rideService.getRideStatus("r1"))
+                .isEqualTo(new RideStatusResponse("r1", RideStatus.ACCEPTED, "d1"));
+    }
+
+    @Test
+    void getRideStatus_throwsWhenMissing() {
+        when(rideRepository.findById("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> rideService.getRideStatus("missing")).isInstanceOf(RideNotFoundException.class);
     }
 
     private void stubFindAndSave(Ride ride) {

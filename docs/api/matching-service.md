@@ -12,7 +12,7 @@ sequenceDiagram
     participant MS as matching-service
     participant LS as location-service
 
-    Rider->>RS: POST /api/v1/rides
+    Rider->>RS: POST /api/v1/rides/request
     RS->>RS: save ride (REQUESTED -> MATCHING), commit
     RS->>K: ride.requested (key = rideId)
     K->>MS: ride.requested

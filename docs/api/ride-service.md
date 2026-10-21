@@ -85,6 +85,18 @@ curl http://localhost:8083/api/v1/rides/7c9e6679-7425-40de-944b-e07fc1f90ae7
 {"error": "Ride not found: 7c9e6679-7425-40de-944b-e07fc1f90ae7"}
 ```
 
+## GET /{rideId}/status
+
+Lightweight view for rider apps that poll: only the id, status and assigned driver (`null` until matched). `404` for an unknown ride.
+
+```bash
+curl http://localhost:8083/api/v1/rides/7c9e6679-7425-40de-944b-e07fc1f90ae7/status
+```
+
+```json
+{ "rideId": "7c9e6679-7425-40de-944b-e07fc1f90ae7", "status": "ACCEPTED", "driverId": "driver-7" }
+```
+
 ## GET /rider/{riderId}
 
 A rider's rides, newest first. `200` with a JSON array (empty if none).
@@ -156,3 +168,25 @@ ride-service publishes to Kafka only **after** the database transaction commits 
 ```
 
 The topics `ride.matched` and `ride.match-failed` are also declared at startup; they are produced by matching-service.
+
+### Consumed topics
+
+Group `ride-service-group`, offsets committed after each record. Each topic has its own deserializer type.
+
+| Topic | Payload | Effect |
+|-------|---------|--------|
+| `ride.matched` | `RideMatchedEvent` (`rideId`, `riderId`, `driverId`, `driverLatitude`, `driverLongitude`, `distanceToPickupKm`, `matchedAt`) | `MATCHING` -> `ACCEPTED`, sets `driverId` |
+| `ride.match-failed` | `RideMatchFailedEvent` (`rideId`, `riderId`, `reason`, `failedAt`) | `MATCHING` -> `NO_DRIVER_FOUND` |
+
+```json
+{ "rideId": "7c9e6679-7425-40de-944b-e07fc1f90ae7", "riderId": "rider-42", "driverId": "driver-7",
+  "driverLatitude": 12.9741, "driverLongitude": 77.5968, "distanceToPickupKm": 0.42,
+  "matchedAt": "2026-01-01T10:00:01Z" }
+```
+
+### Why this is safe
+
+- **Idempotent:** a result is applied only while the ride is `MATCHING`. A duplicate, a late message after the rider cancelled, or a message for an unknown ride is logged and ignored. No exception is thrown, so Kafka does not redeliver it.
+- **Ordering:** the `ride.requested` event is sent only after the ride is committed as `MATCHING`, so a result can never arrive for a ride that is not yet visible.
+- **Concurrent updates:** `Ride` has an `@Version` field. If a cancel and a match race, one loses with an optimistic-lock failure. The loser is retried (up to 3 attempts, each in a fresh transaction that re-reads the ride), and then sees the new status and ignores itself or applies cleanly. If all 3 attempts lose, the error is logged and the record goes to the retry/DLT path.
+- **Retry and DLT:** any other failure is retried 3 times, 1s apart, then the record is published to `ride.matched.DLT` or `ride.match-failed.DLT` (3 partitions each). A message that cannot be deserialized goes straight to the DLT without retries.
