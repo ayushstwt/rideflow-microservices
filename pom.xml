@@ -28,8 +28,7 @@
     <modules>
         <module>libs/common-events</module>
         <module>services/location-service</module>
-        <!-- enabled in Step 4 -->
-        <!-- <module>services/ride-service</module> -->
+        <module>services/ride-service</module>
         <!-- enabled in Step 6 -->
         <!-- <module>services/matching-service</module> -->
     </modules>
