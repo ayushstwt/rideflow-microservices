@@ -1,0 +1,109 @@
+package com.ayshriv.rideservice.controller;
+
+import com.ayshriv.rideservice.dto.RideResponse;
+import com.ayshriv.rideservice.exception.InvalidRideStateException;
+import com.ayshriv.rideservice.exception.RideNotFoundException;
+import com.ayshriv.rideservice.model.RideStatus;
+import com.ayshriv.rideservice.service.RideService;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@WebMvcTest(RideController.class)
+class RideControllerTest {
+
+    private static final String VALID_BODY = """
+            {
+              "riderId": "rider-1",
+              "pickupLatitude": 12.97, "pickupLongitude": 77.59, "pickupAddress": "MG Road",
+              "dropLatitude": 13.02, "dropLongitude": 77.65, "dropAddress": "Airport"
+            }
+            """;
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockitoBean
+    private RideService rideService;
+
+    @Test
+    void requestRide_returns201WithCreatedRide() throws Exception {
+        when(rideService.requestRide(any())).thenReturn(RideResponse.builder()
+                .id("ride-1")
+                .riderId("rider-1")
+                .status(RideStatus.MATCHING)
+                .estimatedFare(new BigDecimal("150.00"))
+                .updatedAt(Instant.parse("2026-01-01T10:00:00Z"))
+                .build());
+
+        mockMvc.perform(post("/api/v1/rides/request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value("ride-1"))
+                .andExpect(jsonPath("$.status").value("MATCHING"))
+                .andExpect(jsonPath("$.estimatedFare").value(150.00))
+                .andExpect(jsonPath("$.updatedAt").exists());
+    }
+
+    @Test
+    void requestRide_returns400WithFieldMapWhenInvalid() throws Exception {
+        String invalidBody = """
+                {
+                  "riderId": "",
+                  "pickupLatitude": 95.0, "pickupLongitude": 77.59, "pickupAddress": "MG Road",
+                  "dropLongitude": 77.65, "dropAddress": "Airport"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/rides/request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.riderId").exists())
+                .andExpect(jsonPath("$.pickupLatitude").exists())
+                .andExpect(jsonPath("$.dropLatitude").exists());
+    }
+
+    @Test
+    void getRide_returns404WhenMissing() throws Exception {
+        when(rideService.getRideById("missing")).thenThrow(new RideNotFoundException("missing"));
+
+        mockMvc.perform(get("/api/v1/rides/missing"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Ride not found: missing"));
+    }
+
+    @Test
+    void startRide_returns409WhenTransitionNotAllowed() throws Exception {
+        when(rideService.startRide("r1")).thenThrow(
+                new InvalidRideStateException("r1", RideStatus.CANCELLED, RideStatus.RIDE_STARTED));
+
+        mockMvc.perform(put("/api/v1/rides/r1/start"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").exists());
+    }
+
+    @Test
+    void unexpectedError_returns500WithoutDetails() throws Exception {
+        when(rideService.cancelRide("r1")).thenThrow(new IllegalStateException("db password leaked"));
+
+        mockMvc.perform(put("/api/v1/rides/r1/cancel"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error").value("Internal server error"));
+    }
+}
