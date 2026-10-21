@@ -29,8 +29,7 @@
         <module>libs/common-events</module>
         <module>services/location-service</module>
         <module>services/ride-service</module>
-        <!-- enabled in Step 6 -->
-        <!-- <module>services/matching-service</module> -->
+        <module>services/matching-service</module>
     </modules>
 
     <dependencyManagement>

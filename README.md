@@ -49,7 +49,7 @@ rideflow-microservices/
 - [x] 3. location-service
 - [x] 4. ride-service core
 - [x] 5. Kafka producer
-- [ ] 6. matching-service
+- [x] 6. matching-service
 - [ ] 7. ride-service consumer
 - [ ] 8. Reliability
 - [ ] 9. Tests
