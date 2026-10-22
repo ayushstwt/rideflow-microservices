@@ -3,6 +3,8 @@ package com.ayshriv.rideservice.controller;
 import com.ayshriv.rideservice.dto.RideRequest;
 import com.ayshriv.rideservice.dto.RideResponse;
 import com.ayshriv.rideservice.dto.RideStatusResponse;
+import com.ayshriv.rideservice.exception.InvalidRideRequestException;
+import com.ayshriv.rideservice.service.RideRequestResult;
 import com.ayshriv.rideservice.service.RideService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,11 +26,17 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RideController {
 
+    static final int MAX_IDEMPOTENCY_KEY_LENGTH = 64;
+
     private final RideService rideService;
 
+    /** 201 for a new ride, 200 when the same rider repeats a request with an Idempotency-Key already used. */
     @PostMapping("/request")
-    public ResponseEntity<RideResponse> requestRide(@Valid @RequestBody RideRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(rideService.requestRide(request));
+    public ResponseEntity<RideResponse> requestRide(
+            @Valid @RequestBody RideRequest request,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey) {
+        RideRequestResult result = rideService.requestRide(request, normalizeKey(idempotencyKey));
+        return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK).body(result.ride());
     }
 
     @GetMapping("/{rideId}")
@@ -58,5 +67,17 @@ public class RideController {
     @PutMapping("/{rideId}/cancel")
     public ResponseEntity<RideResponse> cancelRide(@PathVariable String rideId) {
         return ResponseEntity.ok(rideService.cancelRide(rideId));
+    }
+
+    /** A blank header counts as absent. */
+    private static String normalizeKey(String key) {
+        if (key == null || key.isBlank()) {
+            return null;
+        }
+        if (key.length() > MAX_IDEMPOTENCY_KEY_LENGTH) {
+            throw new InvalidRideRequestException(
+                    "Idempotency-Key must be at most " + MAX_IDEMPOTENCY_KEY_LENGTH + " characters");
+        }
+        return key;
     }
 }

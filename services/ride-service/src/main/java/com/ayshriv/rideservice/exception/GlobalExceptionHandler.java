@@ -54,6 +54,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", ex.getMessage()));
     }
 
+    @ExceptionHandler(ActiveRideExistsException.class)
+    public ResponseEntity<Map<String, String>> handleActiveRideExists(ActiveRideExistsException ex) {
+        Map<String, String> body = new LinkedHashMap<>();
+        body.put("error", "ACTIVE_RIDE_EXISTS");
+        body.put("message", ex.getMessage());
+        body.put("rideId", ex.getRideId());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
     @ExceptionHandler(InvalidRideRequestException.class)
     public ResponseEntity<Map<String, String>> handleInvalidRequest(InvalidRideRequestException ex) {
         return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));

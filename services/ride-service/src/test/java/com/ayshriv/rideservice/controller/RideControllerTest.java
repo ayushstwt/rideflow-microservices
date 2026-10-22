@@ -2,9 +2,11 @@ package com.ayshriv.rideservice.controller;
 
 import com.ayshriv.rideservice.dto.RideResponse;
 import com.ayshriv.rideservice.dto.RideStatusResponse;
+import com.ayshriv.rideservice.exception.ActiveRideExistsException;
 import com.ayshriv.rideservice.exception.InvalidRideStateException;
 import com.ayshriv.rideservice.exception.RideNotFoundException;
 import com.ayshriv.rideservice.model.RideStatus;
+import com.ayshriv.rideservice.service.RideRequestResult;
 import com.ayshriv.rideservice.service.RideService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +19,9 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -43,13 +48,13 @@ class RideControllerTest {
 
     @Test
     void requestRide_returns201WithCreatedRide() throws Exception {
-        when(rideService.requestRide(any())).thenReturn(RideResponse.builder()
+        when(rideService.requestRide(any(), any())).thenReturn(new RideRequestResult(RideResponse.builder()
                 .id("ride-1")
                 .riderId("rider-1")
                 .status(RideStatus.MATCHING)
                 .estimatedFare(new BigDecimal("150.00"))
                 .updatedAt(Instant.parse("2026-01-01T10:00:00Z"))
-                .build());
+                .build(), true));
 
         mockMvc.perform(post("/api/v1/rides/request")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -59,6 +64,67 @@ class RideControllerTest {
                 .andExpect(jsonPath("$.status").value("MATCHING"))
                 .andExpect(jsonPath("$.estimatedFare").value(150.00))
                 .andExpect(jsonPath("$.updatedAt").exists());
+    }
+
+    @Test
+    void requestRide_passesIdempotencyKeyAndReturns200WhenReplayed() throws Exception {
+        when(rideService.requestRide(any(), eq("key-1"))).thenReturn(new RideRequestResult(RideResponse.builder()
+                .id("ride-1").riderId("rider-1").status(RideStatus.MATCHING).build(), false));
+
+        mockMvc.perform(post("/api/v1/rides/request")
+                        .header("Idempotency-Key", "key-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value("ride-1"));
+    }
+
+    @Test
+    void requestRide_blankIdempotencyKeyCountsAsAbsent() throws Exception {
+        when(rideService.requestRide(any(), isNull())).thenReturn(new RideRequestResult(RideResponse.builder()
+                .id("ride-1").riderId("rider-1").status(RideStatus.MATCHING).build(), true));
+
+        mockMvc.perform(post("/api/v1/rides/request")
+                        .header("Idempotency-Key", "  ")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void requestRide_rejectsIdempotencyKeyLongerThan64Characters() throws Exception {
+        mockMvc.perform(post("/api/v1/rides/request")
+                        .header("Idempotency-Key", "k".repeat(65))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Idempotency-Key must be at most 64 characters"));
+
+        verifyNoInteractions(rideService);
+    }
+
+    @Test
+    void requestRide_accepts64CharacterIdempotencyKey() throws Exception {
+        when(rideService.requestRide(any(), eq("k".repeat(64)))).thenReturn(new RideRequestResult(
+                RideResponse.builder().id("ride-1").build(), true));
+
+        mockMvc.perform(post("/api/v1/rides/request")
+                        .header("Idempotency-Key", "k".repeat(64))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void requestRide_returns409WithExistingRideIdWhenRiderHasActiveRide() throws Exception {
+        when(rideService.requestRide(any(), any())).thenThrow(new ActiveRideExistsException("rider-1", "ride-7"));
+
+        mockMvc.perform(post("/api/v1/rides/request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("ACTIVE_RIDE_EXISTS"))
+                .andExpect(jsonPath("$.rideId").value("ride-7"));
     }
 
     @Test

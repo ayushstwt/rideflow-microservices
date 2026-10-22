@@ -1,6 +1,7 @@
 package com.ayshriv.rideservice.messaging;
 
 import com.ayshriv.events.KafkaTopics;
+import com.ayshriv.events.RideClosedEvent;
 import com.ayshriv.events.RideRequestedEvent;
 import com.ayshriv.rideservice.model.Ride;
 import com.ayshriv.rideservice.model.RideStatus;
@@ -48,6 +49,45 @@ class RideEventPublisherTest {
         assertThat(event.getDropLongitude()).isEqualTo(77.65);
         assertThat(event.getDropAddress()).isEqualTo("B");
         assertThat(event.getRequestedAt()).isBetween(before, Instant.now());
+        assertThat(event.getAttempt()).isEqualTo(1);
+    }
+
+    @Test
+    void publishRideRequested_carriesTheCurrentMatchAttempt() {
+        when(kafkaTemplate.send(any(String.class), any(String.class), any()))
+                .thenReturn(new CompletableFuture<SendResult<String, Object>>());
+        Ride ride = ride();
+        ride.setMatchAttempts(3);
+
+        new RideEventPublisher(kafkaTemplate).publishRideRequested(ride);
+
+        ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
+        verify(kafkaTemplate).send(eq(KafkaTopics.RIDE_REQUESTED), eq("ride-1"), payload.capture());
+        assertThat(((RideRequestedEvent) payload.getValue()).getAttempt()).isEqualTo(3);
+    }
+
+    @Test
+    void publishRideClosed_usesClosedTopicAndRideIdAsKey() {
+        when(kafkaTemplate.send(any(String.class), any(String.class), any()))
+                .thenReturn(new CompletableFuture<SendResult<String, Object>>());
+        RideClosedEvent closed = RideClosedEvent.builder().rideId("ride-1").riderId("rider-1").driverId("d1")
+                .finalStatus("COMPLETED").closedAt(Instant.now()).build();
+
+        new RideEventPublisher(kafkaTemplate).publishRideClosed(closed);
+
+        verify(kafkaTemplate).send(KafkaTopics.RIDE_CLOSED, "ride-1", closed);
+    }
+
+    @Test
+    void publishRideClosed_failedSendIsHandledByCallbackWithoutThrowing() {
+        CompletableFuture<SendResult<String, Object>> future = new CompletableFuture<>();
+        when(kafkaTemplate.send(any(String.class), any(String.class), any())).thenReturn(future);
+        RideEventPublisher publisher = new RideEventPublisher(kafkaTemplate);
+
+        assertThatCode(() -> {
+            publisher.publishRideClosed(RideClosedEvent.builder().rideId("ride-1").build());
+            future.completeExceptionally(new IllegalStateException("broker down"));
+        }).doesNotThrowAnyException();
     }
 
     @Test

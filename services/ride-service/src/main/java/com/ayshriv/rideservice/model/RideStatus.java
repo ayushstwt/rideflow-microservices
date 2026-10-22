@@ -16,6 +16,14 @@ public enum RideStatus {
     CANCELLED,
     NO_DRIVER_FOUND;
 
+    /** A rider may have at most one ride in these statuses. */
+    public static final Set<RideStatus> ACTIVE_STATUSES =
+            EnumSet.of(REQUESTED, MATCHING, ACCEPTED, DRIVER_ARRIVING, RIDE_STARTED);
+
+    public boolean isTerminal() {
+        return allowedTransitions().isEmpty();
+    }
+
     public boolean canTransitionTo(RideStatus next) {
         return allowedTransitions().contains(next);
     }

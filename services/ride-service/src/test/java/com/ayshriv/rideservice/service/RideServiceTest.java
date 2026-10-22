@@ -1,5 +1,6 @@
 package com.ayshriv.rideservice.service;
 
+import com.ayshriv.rideservice.config.RideMatchingProperties;
 import com.ayshriv.rideservice.dto.RideMapper;
 import com.ayshriv.rideservice.dto.RideRequest;
 import com.ayshriv.rideservice.dto.RideResponse;
@@ -18,6 +19,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -29,6 +32,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -52,7 +56,8 @@ class RideServiceTest {
     @BeforeEach
     void setUp() {
         rideService = new RideService(rideRepository, new RideMapper(), fareCalculator,
-                Clock.fixed(NOW, ZoneOffset.UTC), eventPublisher);
+                Clock.fixed(NOW, ZoneOffset.UTC), eventPublisher, new RideMatchingProperties(),
+                new TransactionTemplate(mock(PlatformTransactionManager.class)));
     }
 
     @Test
@@ -71,8 +76,10 @@ class RideServiceTest {
             return ride;
         });
 
-        RideResponse response = rideService.requestRide(request);
+        RideRequestResult result = rideService.requestRide(request, null);
 
+        assertThat(result.created()).isTrue();
+        RideResponse response = result.ride();
         assertThat(response.getId()).isEqualTo("ride-1");
         assertThat(response.getRiderId()).isEqualTo("rider-1");
         assertThat(response.getStatus()).isEqualTo(RideStatus.MATCHING);
@@ -81,7 +88,11 @@ class RideServiceTest {
 
         ArgumentCaptor<RideRequestedInternalEvent> published = ArgumentCaptor.forClass(RideRequestedInternalEvent.class);
         verify(eventPublisher, times(1)).publishEvent(published.capture());
-        assertThat(published.getValue().ride().getId()).isEqualTo("ride-1");
+        Ride publishedRide = published.getValue().ride();
+        assertThat(publishedRide.getId()).isEqualTo("ride-1");
+        assertThat(publishedRide.getMatchAttempts()).isEqualTo(1);
+        assertThat(publishedRide.getLastMatchAttemptAt()).isEqualTo(NOW);
+        assertThat(publishedRide.getIdempotencyKey()).isNull();
     }
 
     @Test
@@ -94,7 +105,7 @@ class RideServiceTest {
         when(fareCalculator.calculateFare(12.97, 77.59, 13.02, 77.65)).thenReturn(FARE);
         when(rideRepository.saveAndFlush(any(Ride.class))).thenThrow(new IllegalStateException("db down"));
 
-        assertThatThrownBy(() -> rideService.requestRide(request)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> rideService.requestRide(request, null)).isInstanceOf(IllegalStateException.class);
 
         verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
@@ -246,6 +257,7 @@ class RideServiceTest {
     void markNoDriverFound_movesMatchingRideToNoDriverFound() {
         Ride ride = ride("r1", RideStatus.MATCHING, null);
         when(rideRepository.findById("r1")).thenReturn(Optional.of(ride));
+        ride.setMatchAttempts(3);
 
         rideService.markNoDriverFound("r1", "NO_DRIVERS_AVAILABLE");
 

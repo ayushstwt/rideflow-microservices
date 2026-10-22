@@ -36,6 +36,14 @@ spring:
         enable.idempotence: true
         spring.json.add.type.headers: false
 
+ride:
+  matching:
+    # A ride gets this many matching attempts in total before it becomes NO_DRIVER_FOUND.
+    max-attempts: 3
+    # A MATCHING ride with no result for this long is retried (also recovers lost Kafka messages).
+    retry-delay-seconds: 15
+    scheduler-interval-seconds: 10
+
 management:
   endpoints:
     web:

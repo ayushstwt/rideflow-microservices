@@ -9,6 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,7 +25,12 @@ import java.time.Instant;
 @Entity
 @Table(name = "rides", indexes = {
         @Index(name = "idx_rides_rider_id", columnList = "rider_id"),
-        @Index(name = "idx_rides_status", columnList = "status")
+        @Index(name = "idx_rides_status", columnList = "status"),
+        // Used by the stuck-ride scheduler: MATCHING rides whose last attempt is old.
+        @Index(name = "idx_rides_status_last_match_attempt", columnList = "status,last_match_attempt_at")
+}, uniqueConstraints = {
+        // Makes duplicate creation impossible at the DB level; NULL keys never collide.
+        @UniqueConstraint(name = "uk_rides_rider_idempotency_key", columnNames = {"rider_id", "idempotency_key"})
 })
 @Getter
 @Setter
@@ -77,6 +83,19 @@ public class Ride {
 
     private Instant startedAt;
     private Instant completedAt;
+
+    /** How many times matching was requested for this ride (1 = first attempt). */
+    @Column(nullable = false)
+    @Builder.Default
+    private int matchAttempts = 0;
+
+    private Instant lastMatchAttemptAt;
+
+    /** Client-supplied Idempotency-Key header; unique per rider. */
+    @Column(name = "idempotency_key", length = 64)
+    private String idempotencyKey;
+
+    private String lastFailureReason;
 
     /** Optimistic locking: concurrent updates to the same ride fail instead of overwriting each other. */
     @Version

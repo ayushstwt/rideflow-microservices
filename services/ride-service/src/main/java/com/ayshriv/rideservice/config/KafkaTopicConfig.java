@@ -30,6 +30,12 @@ public class KafkaTopicConfig {
         return topic(KafkaTopics.RIDE_MATCH_FAILED);
     }
 
+    /** Consumed by location-service (its ride.closed.DLT has the same partition count). */
+    @Bean
+    public NewTopic rideClosedTopic() {
+        return topic(KafkaTopics.RIDE_CLOSED);
+    }
+
     /** Dead-letter topics for the consumers; same partition count because the recoverer keeps the partition. */
     @Bean
     public NewTopic rideMatchedDltTopic() {

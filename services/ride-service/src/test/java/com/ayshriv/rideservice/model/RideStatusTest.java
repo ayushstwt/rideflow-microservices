@@ -50,6 +50,22 @@ class RideStatusTest {
     }
 
     @Test
+    void onlyCompletedCancelledAndNoDriverFoundAreTerminal() {
+        for (RideStatus status : RideStatus.values()) {
+            boolean expected = status == RideStatus.COMPLETED || status == RideStatus.CANCELLED
+                    || status == RideStatus.NO_DRIVER_FOUND;
+            assertThat(status.isTerminal()).as(status.name()).isEqualTo(expected);
+        }
+    }
+
+    @Test
+    void activeStatusesAreExactlyTheNonTerminalOnes() {
+        for (RideStatus status : RideStatus.values()) {
+            assertThat(RideStatus.ACTIVE_STATUSES.contains(status)).as(status.name()).isEqualTo(!status.isTerminal());
+        }
+    }
+
+    @Test
     void noStatusCanTransitionBackToRequested() {
         for (RideStatus status : RideStatus.values()) {
             assertThat(status.canTransitionTo(RideStatus.REQUESTED)).isFalse();

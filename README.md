@@ -46,6 +46,16 @@ rideflow-microservices/
 
 Many ride requests are matched at the same time, and two of them must never get the same driver. Matching therefore asks location-service to *reserve* a driver instead of just reading the nearby list. The check and the write happen inside one Redis Lua script (`reserve_driver.lua`), which Redis runs atomically, so concurrent requests cannot both see a driver as free. The script is idempotent per ride (a redelivered `ride.requested` gets the same driver), reserved drivers are hidden from nearby searches, and the reservation is released when ride-service publishes `ride.closed`. A TTL (`location.reservation-ttl-seconds`, 30 min) frees the driver anyway if a ride is never closed. See [docs/api/location-service.md](docs/api/location-service.md).
 
+## Reliability
+
+- **Idempotent requests:** `POST /api/v1/rides/request` accepts an `Idempotency-Key` header. A repeated key returns the same ride (`200` instead of `201`), enforced by a unique `(rider, key)` constraint even for simultaneous duplicates. A rider can have only one active ride.
+- **Atomic driver reservation:** a driver is reserved with one Redis Lua script, so two rides never get the same driver. The reservation is released by the `ride.closed` event and expires on its own as a safety net.
+- **Retries + DLT:** a ride that finds no driver is retried up to 3 times by a scheduler (which also recovers lost Kafka messages). Failing Kafka records are retried 3 times, then sent to a `.DLT` topic.
+- **Transactional publishing:** Kafka events are sent only after the database transaction commits, so a rolled-back request publishes nothing.
+- **Optimistic locking:** rides carry a `@Version`, so concurrent updates (cancel vs match, two scheduler instances) never overwrite each other; the loser retries or backs off.
+
+Details: [ride-service](docs/api/ride-service.md), [location-service](docs/api/location-service.md), [matching-service](docs/api/matching-service.md).
+
 ## Roadmap
 
 - [x] 1. Repository skeleton
@@ -55,9 +65,9 @@ Many ride requests are matched at the same time, and two of them must never get 
 - [x] 5. Kafka producer
 - [x] 6. matching-service
 - [x] 7. ride-service consumer
-- [ ] 8. Reliability
+- [x] 8. Reliability
   - [x] 8A. Driver reservation (atomic Lua script, `ride.closed` release)
-  - [ ] 8B. Ride closing and retries (ride-service)
+  - [x] 8B. Idempotent requests, retries and ride closing (ride-service)
 - [ ] 9. Tests
 - [ ] 10. API docs
 - [ ] 11. Docker + CI
