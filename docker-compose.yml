@@ -1,4 +1,7 @@
-# Infra definition only. Not required to run locally; used by CI/cloud.
+# Infrastructure (redis, mysql, kafka) starts with a plain `docker compose up`.
+# The three application services are behind the "apps" profile:
+#   docker compose --profile apps up --build
+# Containers reach each other by service name on rideflow-net (kafka:29092, redis, mysql, ...).
 name: rideflow
 
 services:
@@ -68,6 +71,93 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
+    networks:
+      - rideflow-net
+
+  # ---------------------------------------------------------------------------------------------
+  # Application services (profile "apps"). Build context is the repo root because of libs/common-events.
+  # Hostnames below are the container names on rideflow-net, NOT the localhost values from .env.
+  # ---------------------------------------------------------------------------------------------
+  location-service:
+    profiles: ["apps"]
+    build:
+      context: .
+      dockerfile: services/location-service/Dockerfile
+    image: rideflow/location-service:dev
+    container_name: rideflow-location-service
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    ports:
+      - "8082:8082"
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8082/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - rideflow-net
+
+  ride-service:
+    profiles: ["apps"]
+    build:
+      context: .
+      dockerfile: services/ride-service/Dockerfile
+    image: rideflow/ride-service:dev
+    container_name: rideflow-ride-service
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    ports:
+      - "8083:8083"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8083/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - rideflow-net
+
+  matching-service:
+    profiles: ["apps"]
+    build:
+      context: .
+      dockerfile: services/matching-service/Dockerfile
+    image: rideflow/matching-service:dev
+    container_name: rideflow-matching-service
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      LOCATION_SERVICE_URL: http://location-service:8082
+    ports:
+      - "8084:8084"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      location-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8084/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
     networks:
       - rideflow-net
 

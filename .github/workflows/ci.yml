@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A new push to the same branch / PR cancels the run that is still going for the older commit.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Unit tests, in-JVM integration tests (EmbeddedKafka, H2, WireMock) and the Testcontainers *IT tests.
+  # GitHub-hosted runners have Docker, so `mvn verify` runs everything.
+  build-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: mvn verify
+        run: mvn -B -ntp verify
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import csv, glob, os
+
+          def pct(covered, missed):
+              total = covered + missed
+              return f"{100 * covered / total:.1f}%" if total else "n/a"
+
+          lines = ["## JaCoCo coverage", "", "| Module | Instructions | Lines | Branches |", "|---|---|---|---|"]
+          found = False
+          for path in sorted(glob.glob("**/target/site/jacoco/jacoco.csv", recursive=True)):
+              found = True
+              module = path.split("/target/")[0]
+              totals = dict.fromkeys(["IM", "IC", "LM", "LC", "BM", "BC"], 0)
+              with open(path, newline="") as f:
+                  for row in csv.DictReader(f):
+                      totals["IM"] += int(row["INSTRUCTION_MISSED"]); totals["IC"] += int(row["INSTRUCTION_COVERED"])
+                      totals["LM"] += int(row["LINE_MISSED"]); totals["LC"] += int(row["LINE_COVERED"])
+                      totals["BM"] += int(row["BRANCH_MISSED"]); totals["BC"] += int(row["BRANCH_COVERED"])
+              lines.append(f"| {module} | {pct(totals['IC'], totals['IM'])} | {pct(totals['LC'], totals['LM'])} | {pct(totals['BC'], totals['BM'])} |")
+          if not found:
+              lines.append("| (no JaCoCo report was produced) | | | |")
+          lines += ["", "Reports only; no coverage threshold is enforced yet."]
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as out:
+              out.write("\n".join(lines) + "\n")
+          PY
+
+      - name: Upload test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            **/target/surefire-reports/
+            **/target/failsafe-reports/
+            **/target/site/jacoco/
+          if-no-files-found: warn
+          retention-days: 14
+
+  # Proves that each Dockerfile builds. Nothing is pushed anywhere.
+  docker-build:
+    name: Docker build (${{ matrix.service }})
+    needs: build-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [location-service, ride-service, matching-service]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.service }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/${{ matrix.service }}/Dockerfile
+          push: false
+          tags: rideflow/${{ matrix.service }}:ci
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  # Starts the whole stack with Docker Compose and runs the smoke test against it.
+  e2e:
+    name: End-to-end smoke test
+    needs: docker-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env (dummy CI-only credentials, no real secrets)
+        run: cp .env.example .env
+
+      - name: Start the stack
+        run: docker compose --profile apps up -d --build
+
+      - name: Wait until the services are healthy
+        run: |
+          deadline=$((SECONDS + 300))
+          for container in rideflow-location-service rideflow-ride-service rideflow-matching-service; do
+            until [ "$(docker inspect -f '{{.State.Health.Status}}' "$container")" = "healthy" ]; do
+              if [ "$SECONDS" -ge "$deadline" ]; then
+                echo "::error::$container did not become healthy within 300s"
+                exit 1
+              fi
+              sleep 5
+            done
+            echo "$container is healthy"
+          done
+
+      - name: Smoke test
+        run: bash scripts/smoke-test.sh
+
+      - name: Container logs (on failure)
+        if: failure()
+        run: docker compose --profile apps logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose --profile apps down -v

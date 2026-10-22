@@ -3,6 +3,7 @@
 An Uber-like ride-hailing backend built with event-driven Spring Boot microservices.
 
 ![Status](https://img.shields.io/badge/status-under%20active%20development-orange)
+[![CI](https://github.com/<your-username>/rideflow-microservices/actions/workflows/ci.yml/badge.svg)](https://github.com/<your-username>/rideflow-microservices/actions/workflows/ci.yml)
 
 **Status: under active development**
 
@@ -45,6 +46,49 @@ rideflow-microservices/
 ## Concurrency
 
 Many ride requests are matched at the same time, and two of them must never get the same driver. Matching therefore asks location-service to *reserve* a driver instead of just reading the nearby list. The check and the write happen inside one Redis Lua script (`reserve_driver.lua`), which Redis runs atomically, so concurrent requests cannot both see a driver as free. The script is idempotent per ride (a redelivered `ride.requested` gets the same driver), reserved drivers are hidden from nearby searches, and the reservation is released when ride-service publishes `ride.closed`. A TTL (`location.reservation-ttl-seconds`, 30 min) frees the driver anyway if a ride is never closed. See [docs/api/location-service.md](docs/api/location-service.md).
+
+## Run the full stack
+
+For people **with Docker** (local Docker is optional: CI builds the images and runs the whole stack for you, see below):
+
+```bash
+cp .env.example .env          # replace the placeholder passwords for anything but a throwaway local run
+docker compose --profile apps up --build
+```
+
+A plain `docker compose up` still starts only the infrastructure (Redis, MySQL, Kafka). The `apps` profile adds the three services, which
+wait for their dependencies to be healthy (matching-service also waits for location-service). Inside the containers the services use the
+container hostnames (`redis`, `mysql`, `kafka:29092`, `location-service`), so the `localhost` values in `.env` only matter when you run a
+service from your IDE.
+
+| What | URL |
+|------|-----|
+| location-service Swagger UI | http://localhost:8082/swagger-ui.html |
+| ride-service Swagger UI | http://localhost:8083/swagger-ui.html |
+| matching-service Swagger UI | http://localhost:8084/swagger-ui.html |
+
+With the stack up, `bash scripts/smoke-test.sh` runs the end-to-end check (needs `curl` and `jq`). Stop everything with
+`docker compose --profile apps down -v`.
+
+## CI pipeline
+
+GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs on every push to `main` and on pull requests; a newer push cancels the
+older run of the same branch. Dependabot proposes weekly updates for Maven, GitHub Actions and the Dockerfiles.
+
+```mermaid
+flowchart LR
+    A[push to main / pull request] --> B["build-test<br/>mvn verify: unit tests, EmbeddedKafka tests,<br/>Testcontainers *IT tests, JaCoCo reports"]
+    B --> C["docker-build<br/>builds the 3 images<br/>(location, ride, matching)"]
+    C --> D["e2e<br/>docker compose --profile apps up<br/>scripts/smoke-test.sh<br/>logs on failure, then down -v"]
+```
+
+| Job | What it proves |
+|-----|----------------|
+| `build-test` | The code compiles and all tests pass, including the Redis Lua-script tests that need Docker. Test and coverage reports are uploaded as an artifact and a coverage table goes into the job summary. |
+| `docker-build` | Each Dockerfile builds (nothing is pushed). |
+| `e2e` | The containers start, become healthy and complete a ride (register drivers, request, match, cancel, release). |
+
+You do not need Docker on your machine to contribute: open a pull request and CI covers the Docker parts.
 
 ## API documentation
 
@@ -119,7 +163,7 @@ Details: [ride-service](docs/api/ride-service.md), [location-service](docs/api/l
   - [x] 8B. Idempotent requests, retries and ride closing (ride-service)
 - [x] 9. Tests
 - [x] 10. API docs
-- [ ] 11. Docker + CI
+- [x] 11. Docker + CI
 - [ ] 12. Final docs
 
 ## License
