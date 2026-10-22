@@ -68,7 +68,7 @@ Details: [ride-service](docs/api/ride-service.md), [location-service](docs/api/l
 - [x] 8. Reliability
   - [x] 8A. Driver reservation (atomic Lua script, `ride.closed` release)
   - [x] 8B. Idempotent requests, retries and ride closing (ride-service)
-- [ ] 9. Tests
+- [x] 9. Tests
 - [ ] 10. API docs
 - [ ] 11. Docker + CI
 - [ ] 12. Final docs

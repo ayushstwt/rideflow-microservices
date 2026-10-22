@@ -50,8 +50,13 @@ public class KafkaConsumerConfig {
         json.addTrustedPackages(TRUSTED_PACKAGE);
 
         ConcurrentKafkaListenerContainerFactory<String, T> factory = new ConcurrentKafkaListenerContainerFactory<>();
+        // BUG FIX (found by RideFlowIntegrationTest): the JsonDeserializer above is already configured in code, and
+        // Spring Kafka refuses a deserializer that is configured both ways, so the container could never start.
+        // The spring.json.* / spring.deserializer.* properties from application.yml are therefore left out here.
+        Map<String, Object> consumerProps = new LinkedHashMap<>(properties.buildConsumerProperties(null));
+        consumerProps.keySet().removeIf(key -> key.startsWith("spring.json.") || key.startsWith("spring.deserializer."));
         factory.setConsumerFactory(new DefaultKafkaConsumerFactory<>(
-                properties.buildConsumerProperties(null), new StringDeserializer(), new ErrorHandlingDeserializer<>(json)));
+                consumerProps, new StringDeserializer(), new ErrorHandlingDeserializer<>(json)));
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.RECORD);
         factory.setCommonErrorHandler(errorHandler(properties, jsonTemplate));
         return factory;
