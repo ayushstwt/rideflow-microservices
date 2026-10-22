@@ -1,6 +1,6 @@
 # matching-service
 
-Port `8084`. Event-driven only: it has no REST API of its own (just the actuator `health` and `info` endpoints). It consumes `ride.requested`, asks location-service for nearby drivers, picks the best one and publishes the result.
+Port `8084`. Event-driven only: it has no REST API of its own (just the actuator `health` and `info` endpoints). It consumes `ride.requested`, asks location-service for nearby free drivers, ranks them, reserves one and publishes the result.
 
 ## Flow
 
@@ -17,11 +17,15 @@ sequenceDiagram
     RS->>K: ride.requested (key = rideId)
     K->>MS: ride.requested
     MS->>LS: GET /api/v1/locations/drivers/nearby
-    LS-->>MS: nearby drivers (or empty / fallback)
+    LS-->>MS: free nearby drivers (or empty / fallback)
     MS->>MS: score and rank candidates
-    alt driver found
+    MS->>LS: POST /api/v1/locations/drivers/reserve (candidates, best first)
+    LS->>LS: Lua script: first free candidate, atomically
+    alt driver reserved
+        LS-->>MS: 200 driverId
         MS->>K: ride.matched (key = rideId)
-    else none found
+    else no free driver (409), circuit open, or no nearby driver at all
+        LS-->>MS: 409 NO_DRIVER_AVAILABLE
         MS->>K: ride.match-failed (key = rideId)
     end
 ```
@@ -90,9 +94,18 @@ The two weights must sum to `1.0`, otherwise the service refuses to start. The h
 
 Ratings come from `DriverRatingProvider`. Until a driver-service exists, `StaticDriverRatingProvider` returns `4.5` for every driver, so ranking is effectively by distance.
 
+## Driver reservation
+
+After scoring, all candidates (best first, at most 20) go to location-service's `POST /api/v1/locations/drivers/reserve`. The driver it returns is the match, even if it is not the top-scored one because another ride reserved that driver in between. location-service decides in one atomic Lua script, so a driver can never be matched to two rides, and a repeated request for the same ride returns the same driver. `ride.matched` carries that driver's location and distance taken from the candidate list.
+
+A `409` (every candidate taken) or the circuit-breaker fallback means no match: `ride.match-failed` is published. The 409 is ignored by the circuit breaker's failure count because it is a normal answer, not an outage.
+
+Known limitation: reserved drivers are hidden from `/drivers/nearby`. If `ride.requested` is redelivered after a successful match and no *other* free driver is nearby, the nearby list is empty and the ride is reported as failed instead of re-using its driver. If other free drivers are nearby, the reservation returns the original driver (location and distance are then `null` in `ride.matched`). Step 8B's ride-service must therefore ignore events for rides that already left `MATCHING`.
+
 ## Failure handling
 
 - **location-service down or slow:** 2s connect and read timeouts, behind a Resilience4j circuit breaker. The fallback logs a warning and returns no drivers, so the ride is reported as `NO_DRIVERS_AVAILABLE`.
 - **Processing error:** the record is retried 3 times, 1s apart, then published to `ride.requested.DLT` (3 partitions).
 - **Undeserializable message:** goes straight to `ride.requested.DLT` without retries.
+- **Reserve call times out after succeeding:** the driver stays reserved while the ride is reported as failed; it is freed by the `ride.closed` event, or at the latest by the reservation TTL.
 - **Publish failure:** logged with the `rideId`; there is no retry yet (Step 8).

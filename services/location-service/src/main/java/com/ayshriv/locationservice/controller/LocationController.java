@@ -2,6 +2,9 @@ package com.ayshriv.locationservice.controller;
 
 import com.ayshriv.locationservice.dto.DriverLocationRequest;
 import com.ayshriv.locationservice.dto.NearbyDriverResponse;
+import com.ayshriv.locationservice.dto.ReserveRequest;
+import com.ayshriv.locationservice.dto.ReserveResponse;
+import com.ayshriv.locationservice.exception.NoDriverAvailableException;
 import com.ayshriv.locationservice.service.LocationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
@@ -45,6 +48,21 @@ public class LocationController {
             @RequestParam(defaultValue = "5.0") @DecimalMin("0.1") @DecimalMax("50.0") Double radius,
             @RequestParam(defaultValue = "10") @Min(1) @Max(50) Integer limit) {
         return ResponseEntity.ok(locationService.findNearbyDrivers(latitude, longitude, radius, limit));
+    }
+
+    /** 200 with the reserved driver, or 409 NO_DRIVER_AVAILABLE when every candidate is taken. */
+    @PostMapping("/drivers/reserve")
+    public ResponseEntity<ReserveResponse> reserveDriver(@Valid @RequestBody ReserveRequest request) {
+        String driverId = locationService.reserveFirstAvailable(request.getRideId(), request.getCandidateDriverIds())
+                .orElseThrow(() -> new NoDriverAvailableException(request.getRideId()));
+        return ResponseEntity.ok(new ReserveResponse(driverId));
+    }
+
+    /** Manual release (ops/testing); the normal path is the ride.closed event. */
+    @DeleteMapping("/reservations/{rideId}")
+    public ResponseEntity<Void> releaseReservation(@PathVariable String rideId) {
+        locationService.releaseDriver(rideId);
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/drivers/{driverId}")

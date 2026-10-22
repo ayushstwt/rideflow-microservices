@@ -17,4 +17,7 @@ public final class KafkaTopics {
 
     /** Produced by matching-service, consumed by ride-service. */
     public static final String RIDE_MATCH_FAILED = "ride.match-failed";
+
+    /** Produced by ride-service, consumed by location-service to release the reserved driver. */
+    public static final String RIDE_CLOSED = "ride.closed";
 }

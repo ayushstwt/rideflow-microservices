@@ -54,6 +54,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(Map.of("error", "Malformed request body"));
     }
 
+    @ExceptionHandler(NoDriverAvailableException.class)
+    public ResponseEntity<Map<String, String>> handleNoDriverAvailable(NoDriverAvailableException ex) {
+        log.info(ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "NO_DRIVER_AVAILABLE"));
+    }
+
     /** Catch-all: log the details, but never leak them to the client. */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleUnexpected(Exception ex) {

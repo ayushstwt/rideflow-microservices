@@ -44,6 +44,9 @@ resilience4j:
         minimum-number-of-calls: 5
         failure-rate-threshold: 50
         wait-duration-in-open-state: 10s
+        # "No free driver" (409 from reserve) is a normal business answer, not an outage: never count it.
+        ignore-exceptions:
+          - feign.FeignException$Conflict
   timelimiter:
     configs:
       default:

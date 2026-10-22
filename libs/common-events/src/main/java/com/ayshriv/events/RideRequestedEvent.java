@@ -35,4 +35,8 @@ public class RideRequestedEvent {
     private String dropAddress;
 
     private Instant requestedAt;
+
+    /** Matching attempt number, starting at 1; older messages without this field default to 1. */
+    @Builder.Default
+    private int attempt = 1;
 }
