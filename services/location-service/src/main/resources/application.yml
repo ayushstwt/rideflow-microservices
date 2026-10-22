@@ -42,3 +42,15 @@ location:
   driver-ttl-seconds: 30
   # Safety net: a reservation expires on its own so a crashed or never-closed ride cannot block a driver forever.
   reservation-ttl-seconds: 1800
+
+app:
+  # Filled in by Maven resource filtering; shown as the API version in Swagger UI.
+  version: '@project.version@'
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: ${SWAGGER_ENABLED:true}
+    operations-sorter: method

@@ -1,5 +1,7 @@
 # location-service API
 
+> **Source of truth:** the generated OpenAPI docs, at http://localhost:8082/swagger-ui.html (JSON: `/v3/api-docs`). This page adds background and examples and may lag behind. A Postman collection is in [docs/postman](../postman).
+
 Base URL: `http://localhost:8082/api/v1/locations`
 
 Driver positions are stored in a Redis GEO set. A driver counts as online only while a heartbeat key

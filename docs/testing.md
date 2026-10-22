@@ -109,6 +109,12 @@ Lua scripts:
 Other location-service tests (`LocationServiceTest`, `LocationControllerReservationTest`, `RideClosedListenerTest`) are mock-based and check
 the Redis keys, arguments and TTLs passed to the scripts, the validation rules and the HTTP status codes.
 
+### API documentation (all services)
+
+`OpenApiDocsTest` in each service loads the real Spring context (H2 for ride-service; Redis and Kafka are never contacted) and fetches
+`/v3/api-docs`: it proves the documented paths and HTTP methods exist, the documented status codes and the `Idempotency-Key` header are
+present, DTO fields carry descriptions and examples, and `/swagger-ui.html` is reachable. matching-service only lists the actuator endpoints.
+
 ## What is not covered yet
 
 - The Lua scripts, ride-service against MySQL, and the full stack in Docker are only exercised by `*IT` tests and the smoke test, which

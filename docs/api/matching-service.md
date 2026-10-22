@@ -1,5 +1,7 @@
 # matching-service
 
+> **Source of truth:** the generated OpenAPI docs, at http://localhost:8084/swagger-ui.html (only the actuator health and info endpoints are listed). This page adds background and examples and may lag behind. A Postman collection is in [docs/postman](../postman).
+
 Port `8084`. Event-driven only: it has no REST API of its own (just the actuator `health` and `info` endpoints). It consumes `ride.requested`, asks location-service for nearby free drivers, ranks them, reserves one and publishes the result.
 
 ## Flow

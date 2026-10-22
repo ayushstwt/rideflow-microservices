@@ -1,5 +1,7 @@
 # ride-service API
 
+> **Source of truth:** the generated OpenAPI docs, at http://localhost:8083/swagger-ui.html (JSON: `/v3/api-docs`). This page adds background and examples and may lag behind. A Postman collection is in [docs/postman](../postman).
+
 Base URL: `http://localhost:8083/api/v1/rides`
 
 Ride ids are UUID strings. Fares are decimals with two places: `50 + 12 per km` (straight-line distance),

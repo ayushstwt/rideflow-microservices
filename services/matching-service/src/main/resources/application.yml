@@ -67,3 +67,17 @@ management:
     web:
       exposure:
         include: health,info
+
+app:
+  # Filled in by Maven resource filtering; shown as the API version in Swagger UI.
+  version: '@project.version@'
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: ${SWAGGER_ENABLED:true}
+    operations-sorter: method
+  # Lists the exposed actuator endpoints (health, info) next to the (empty) business API.
+  show-actuator: true

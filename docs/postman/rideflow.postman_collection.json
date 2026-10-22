@@ -1,0 +1,1454 @@
+{
+  "info": {
+    "name": "Rideflow",
+    "description": "Rideflow microservices: Location Service (8082), Ride Service (8083), Matching Service (8084). Swagger UI: /swagger-ui.html on each service is the source of truth.",
+    "_postman_id": "b4f6a1a2-5a3d-4f55-9c0e-7a1d2b3c4d5e",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Location Service",
+      "item": [
+        {
+          "name": "Update driver location",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{locationUrl}}/api/v1/locations/drivers/update",
+              "host": [
+                "{{locationUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "locations",
+                "drivers",
+                "update"
+              ]
+            },
+            "description": "Creates or refreshes the driver position and heartbeat (30s TTL).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"driverId\": \"{{driverId}}\",\n  \"latitude\": 26.8467,\n  \"longitude\": 80.9462\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"status is updated\", () => pm.expect(pm.response.json().status).to.eql(\"updated\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update driver location (invalid, expect 400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{locationUrl}}/api/v1/locations/drivers/update",
+              "host": [
+                "{{locationUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "locations",
+                "drivers",
+                "update"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"driverId\": \"\",\n  \"latitude\": 95,\n  \"longitude\": 80.9462\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"body maps fields to messages\", () => pm.expect(pm.response.json()).to.have.property(\"latitude\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Nearby drivers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{locationUrl}}/api/v1/locations/drivers/nearby?latitude=26.8467&longitude=80.9462&radius=5.0&limit=10",
+              "host": [
+                "{{locationUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "locations",
+                "drivers",
+                "nearby"
+              ],
+              "query": [
+                {
+                  "key": "latitude",
+                  "value": "26.8467"
+                },
+                {
+                  "key": "longitude",
+                  "value": "80.9462"
+                },
+                {
+                  "key": "radius",
+                  "value": "5.0"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Online, unreserved drivers within the radius, nearest first."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"is an array\", () => pm.expect(pm.response.json()).to.be.an(\"array\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reserve driver",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{locationUrl}}/api/v1/locations/drivers/reserve",
+              "host": [
+                "{{locationUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "locations",
+                "drivers",
+                "reserve"
+              ]
+            },
+            "description": "Reserves the first free candidate. Idempotent per rideId. 409 NO_DRIVER_AVAILABLE when all are taken.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rideId\": \"{{rideId}}\",\n  \"candidateDriverIds\": [\n    \"{{driverId}}\",\n    \"driver-lko-002\",\n    \"driver-lko-003\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 reserved or 409 none free\", function () {",
+                  "    pm.expect(pm.response.code === 200 || pm.response.code === 409).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Release reservation",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{locationUrl}}/api/v1/locations/reservations/{{rideId}}",
+              "host": [
+                "{{locationUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "locations",
+                "reservations",
+                "{{rideId}}"
+              ]
+            },
+            "description": "Manual release (ops/testing). Safe to call twice."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"204 No Content\", function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remove driver",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{locationUrl}}/api/v1/locations/drivers/{{driverId}}",
+              "host": [
+                "{{locationUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "locations",
+                "drivers",
+                "{{driverId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"204 No Content\", function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{locationUrl}}/actuator/health",
+              "host": [
+                "{{locationUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"status is UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Ride Service",
+      "item": [
+        {
+          "name": "Request ride",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}",
+                "description": "Same key + same riderId returns the same ride with 200 instead of creating a new one (201)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{rideUrl}}/api/v1/rides/request",
+              "host": [
+                "{{rideUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rides",
+                "request"
+              ]
+            },
+            "description": "First call returns 201. Sending the same Idempotency-Key again returns 200 with the same ride. 409 ACTIVE_RIDE_EXISTS when the rider already has an active ride.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"riderId\": \"{{riderId}}\",\n  \"pickupLatitude\": 26.8467,\n  \"pickupLongitude\": 80.9462,\n  \"pickupAddress\": \"Hazratganj, Lucknow\",\n  \"dropLatitude\": 26.7606,\n  \"dropLongitude\": 80.8893,\n  \"dropAddress\": \"Chaudhary Charan Singh Airport, Lucknow\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// A fresh key for every new ride. The replay request below reuses {{idempotencyKey}} unchanged.",
+                  "pm.collectionVariables.set(\"idempotencyKey\", pm.variables.replaceIn(\"{{$guid}}\"));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created (first call)\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"response has a ride id and is MATCHING\", function () {",
+                  "    pm.expect(body.id).to.be.a(\"string\");",
+                  "    pm.expect(body.status).to.eql(\"MATCHING\");",
+                  "});",
+                  "pm.collectionVariables.set(\"rideId\", body.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Request ride (replay same Idempotency-Key, expect 200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}",
+                "description": "Same key + same riderId returns the same ride with 200 instead of creating a new one (201)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{rideUrl}}/api/v1/rides/request",
+              "host": [
+                "{{rideUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rides",
+                "request"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"riderId\": \"{{riderId}}\",\n  \"pickupLatitude\": 26.8467,\n  \"pickupLongitude\": 80.9462,\n  \"pickupAddress\": \"Hazratganj, Lucknow\",\n  \"dropLatitude\": 26.7606,\n  \"dropLongitude\": 80.8893,\n  \"dropAddress\": \"Chaudhary Charan Singh Airport, Lucknow\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK (replay)\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"same ride as before\", () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get(\"rideId\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Request ride (invalid, expect 400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{rideUrl}}/api/v1/rides/request",
+              "host": [
+                "{{rideUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rides",
+                "request"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"riderId\": \"\",\n  \"pickupLatitude\": 95\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get ride",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{rideUrl}}/api/v1/rides/{{rideId}}",
+              "host": [
+                "{{rideUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rides",
+                "{{rideId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"id matches\", () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get(\"rideId\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get ride status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{rideUrl}}/api/v1/rides/{{rideId}}/status",
+              "host": [
+                "{{rideUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rides",
+                "{{rideId}}",
+                "status"
+              ]
+            },
+            "description": "Lifecycle: REQUESTED -> MATCHING -> ACCEPTED -> DRIVER_ARRIVING -> RIDE_STARTED -> COMPLETED; CANCELLED / NO_DRIVER_FOUND are the other terminal states."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"has status\", () => pm.expect(pm.response.json().status).to.be.a(\"string\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rides of a rider",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{rideUrl}}/api/v1/rides/rider/{{riderId}}",
+              "host": [
+                "{{rideUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rides",
+                "rider",
+                "{{riderId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"is an array\", () => pm.expect(pm.response.json()).to.be.an(\"array\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Start ride",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{rideUrl}}/api/v1/rides/{{rideId}}/start",
+              "host": [
+                "{{rideUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rides",
+                "{{rideId}}",
+                "start"
+              ]
+            },
+            "description": "Allowed from ACCEPTED / DRIVER_ARRIVING, only with an assigned driver."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK or 409 (not ACCEPTED yet)\", function () {",
+                  "    pm.expect(pm.response.code === 200 || pm.response.code === 409).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Complete ride",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{rideUrl}}/api/v1/rides/{{rideId}}/complete",
+              "host": [
+                "{{rideUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rides",
+                "{{rideId}}",
+                "complete"
+              ]
+            },
+            "description": "Allowed from RIDE_STARTED only."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK or 409 (not started)\", function () {",
+                  "    pm.expect(pm.response.code === 200 || pm.response.code === 409).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancel ride",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{rideUrl}}/api/v1/rides/{{rideId}}/cancel",
+              "host": [
+                "{{rideUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rides",
+                "{{rideId}}",
+                "cancel"
+              ]
+            },
+            "description": "Allowed from REQUESTED, MATCHING, ACCEPTED, DRIVER_ARRIVING. Releases the driver via ride.closed."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK or 409 (already finished)\", function () {",
+                  "    pm.expect(pm.response.code === 200 || pm.response.code === 409).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{rideUrl}}/actuator/health",
+              "host": [
+                "{{rideUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"status is UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Matching/Health",
+      "item": [
+        {
+          "name": "Matching service health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{matchingUrl}}/actuator/health",
+              "host": [
+                "{{matchingUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "matching-service is event-driven and has no business REST API; only actuator endpoints."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"status is UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Matching service info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{matchingUrl}}/actuator/info",
+              "host": [
+                "{{matchingUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "info"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Location service health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{locationUrl}}/actuator/health",
+              "host": [
+                "{{locationUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ride service health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{rideUrl}}/actuator/health",
+              "host": [
+                "{{rideUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Happy path (run in order)",
+      "description": "Same scenario as scripts/smoke-test.sh: register 3 drivers, request a ride, wait for ACCEPTED, check the driver is hidden from nearby, cancel, check the driver is back. Run the folder with the Collection Runner (needs the whole stack running).",
+      "item": [
+        {
+          "name": "1. Register driver 1",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{locationUrl}}/api/v1/locations/drivers/update",
+              "host": [
+                "{{locationUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "locations",
+                "drivers",
+                "update"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"driverId\": \"{{driver1Id}}\",\n  \"latitude\": 26.8477,\n  \"longitude\": 80.9472\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"driver1Id\", \"smoke-driver-\" + Date.now() + \"-1\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Register driver 2",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{locationUrl}}/api/v1/locations/drivers/update",
+              "host": [
+                "{{locationUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "locations",
+                "drivers",
+                "update"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"driverId\": \"{{driver2Id}}\",\n  \"latitude\": 26.8487,\n  \"longitude\": 80.9482\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"driver2Id\", \"smoke-driver-\" + Date.now() + \"-2\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Register driver 3",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{locationUrl}}/api/v1/locations/drivers/update",
+              "host": [
+                "{{locationUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "locations",
+                "drivers",
+                "update"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"driverId\": \"{{driver3Id}}\",\n  \"latitude\": 26.8497,\n  \"longitude\": 80.9492\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"driver3Id\", \"smoke-driver-\" + Date.now() + \"-3\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. Nearby drivers (all 3 visible)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{locationUrl}}/api/v1/locations/drivers/nearby?latitude=26.8467&longitude=80.9462&radius=5&limit=50",
+              "host": [
+                "{{locationUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "locations",
+                "drivers",
+                "nearby"
+              ],
+              "query": [
+                {
+                  "key": "latitude",
+                  "value": "26.8467"
+                },
+                {
+                  "key": "longitude",
+                  "value": "80.9462"
+                },
+                {
+                  "key": "radius",
+                  "value": "5"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ids = pm.response.json().map(d => d.driverId);",
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"all 3 registered drivers are visible\", () => {",
+                  "    [\"driver1Id\", \"driver2Id\", \"driver3Id\"].forEach(v => pm.expect(ids).to.include(pm.collectionVariables.get(v)));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5. Request ride (with Idempotency-Key)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}",
+                "description": "Same key + same riderId returns the same ride with 200 instead of creating a new one (201)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{rideUrl}}/api/v1/rides/request",
+              "host": [
+                "{{rideUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rides",
+                "request"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"riderId\": \"{{riderId}}\",\n  \"pickupLatitude\": 26.8467,\n  \"pickupLongitude\": 80.9462,\n  \"pickupAddress\": \"Hazratganj, Lucknow\",\n  \"dropLatitude\": 26.7606,\n  \"dropLongitude\": 80.8893,\n  \"dropAddress\": \"Chaudhary Charan Singh Airport, Lucknow\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"riderId\", \"smoke-rider-\" + Date.now());",
+                  "pm.collectionVariables.set(\"idempotencyKey\", pm.variables.replaceIn(\"{{$guid}}\"));",
+                  "pm.collectionVariables.set(\"pollCount\", 0);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.test(\"response has a ride id and is MATCHING\", function () {",
+                  "    pm.expect(body.id).to.be.a(\"string\");",
+                  "    pm.expect(body.status).to.eql(\"MATCHING\");",
+                  "});",
+                  "pm.collectionVariables.set(\"rideId\", body.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6. Poll status until ACCEPTED",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{rideUrl}}/api/v1/rides/{{rideId}}/status",
+              "host": [
+                "{{rideUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rides",
+                "{{rideId}}",
+                "status"
+              ]
+            },
+            "description": "Click \"Send\" again (or use the Collection Runner with this request repeated) until it reports ACCEPTED. In the runner the script below repeats the request itself, up to 30 times."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const attempts = Number(pm.collectionVariables.get(\"pollCount\") || 0) + 1;",
+                  "if (body.status === \"ACCEPTED\") {",
+                  "    pm.collectionVariables.set(\"pollCount\", 0);",
+                  "    pm.collectionVariables.set(\"assignedDriverId\", body.driverId);",
+                  "    pm.test(\"ACCEPTED with a driver\", () => pm.expect(body.driverId).to.be.a(\"string\"));",
+                  "} else if (body.status === \"MATCHING\" && attempts < 30) {",
+                  "    pm.collectionVariables.set(\"pollCount\", attempts);",
+                  "    postman.setNextRequest(pm.info.requestName); // poll again",
+                  "} else {",
+                  "    pm.collectionVariables.set(\"pollCount\", 0);",
+                  "    pm.test(\"ride reached ACCEPTED\", () => pm.expect(body.status).to.eql(\"ACCEPTED\"));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "7. Nearby drivers (assigned driver hidden)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{locationUrl}}/api/v1/locations/drivers/nearby?latitude=26.8467&longitude=80.9462&radius=5&limit=50",
+              "host": [
+                "{{locationUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "locations",
+                "drivers",
+                "nearby"
+              ],
+              "query": [
+                {
+                  "key": "latitude",
+                  "value": "26.8467"
+                },
+                {
+                  "key": "longitude",
+                  "value": "80.9462"
+                },
+                {
+                  "key": "radius",
+                  "value": "5"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ids = pm.response.json().map(d => d.driverId);",
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"assigned driver is no longer returned\", () => pm.expect(ids).to.not.include(pm.collectionVariables.get(\"assignedDriverId\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "8. Cancel ride",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{rideUrl}}/api/v1/rides/{{rideId}}/cancel",
+              "host": [
+                "{{rideUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rides",
+                "{{rideId}}",
+                "cancel"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Driver heartbeats last ~30s and the polling above may have used them up: refresh all three first.",
+                  "[\"driver1Id\", \"driver2Id\", \"driver3Id\"].forEach((name, i) => {",
+                  "    pm.sendRequest({",
+                  "        url: pm.variables.get(\"locationUrl\") + \"/api/v1/locations/drivers/update\",",
+                  "        method: \"POST\",",
+                  "        header: {\"Content-Type\": \"application/json\"},",
+                  "        body: {mode: \"raw\", raw: JSON.stringify({driverId: pm.variables.get(name),",
+                  "            latitude: 26.8467 + 0.001 * (i + 1), longitude: 80.9462 + 0.001 * (i + 1)})}",
+                  "    }, function () {});",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"CANCELLED\", () => pm.expect(pm.response.json().status).to.eql(\"CANCELLED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "9. Nearby drivers again (driver released)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{locationUrl}}/api/v1/locations/drivers/nearby?latitude=26.8467&longitude=80.9462&radius=5&limit=50",
+              "host": [
+                "{{locationUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "locations",
+                "drivers",
+                "nearby"
+              ],
+              "query": [
+                {
+                  "key": "latitude",
+                  "value": "26.8467"
+                },
+                {
+                  "key": "longitude",
+                  "value": "80.9462"
+                },
+                {
+                  "key": "radius",
+                  "value": "5"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "The release travels through Kafka (ride.closed) so it may take a moment: send again if the driver is not back yet."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ids = pm.response.json().map(d => d.driverId);",
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"assigned driver is returned again\", () => pm.expect(ids).to.include(pm.collectionVariables.get(\"assignedDriverId\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10. Clean up drivers",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{locationUrl}}/api/v1/locations/drivers/{{driver1Id}}",
+              "host": [
+                "{{locationUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "locations",
+                "drivers",
+                "{{driver1Id}}"
+              ]
+            },
+            "description": "Removes driver 1; delete drivers 2 and 3 with the \"Remove driver\" request if you want a clean slate (they expire after 30s anyway)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"204 No Content\", function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "locationUrl",
+      "value": "http://localhost:8082"
+    },
+    {
+      "key": "rideUrl",
+      "value": "http://localhost:8083"
+    },
+    {
+      "key": "matchingUrl",
+      "value": "http://localhost:8084"
+    },
+    {
+      "key": "riderId",
+      "value": "rider-lko-42"
+    },
+    {
+      "key": "rideId",
+      "value": ""
+    },
+    {
+      "key": "driverId",
+      "value": "driver-lko-001"
+    },
+    {
+      "key": "idempotencyKey",
+      "value": ""
+    },
+    {
+      "key": "driver1Id",
+      "value": ""
+    },
+    {
+      "key": "driver2Id",
+      "value": ""
+    },
+    {
+      "key": "driver3Id",
+      "value": ""
+    },
+    {
+      "key": "assignedDriverId",
+      "value": ""
+    },
+    {
+      "key": "pollCount",
+      "value": "0"
+    }
+  ]
+}
