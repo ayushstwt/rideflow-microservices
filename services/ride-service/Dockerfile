@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/root/.m2 \
 RUN java -Djarmode=layertools -jar services/ride-service/target/ride-service-*.jar extract --destination /layers
 
 # ---- runtime: JRE only, non-root, one image layer per dependency group for good caching ----
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:24-jre-alpine
 RUN addgroup -S spring && adduser -S spring -G spring
 WORKDIR /app
 
